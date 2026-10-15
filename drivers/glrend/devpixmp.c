@@ -18,7 +18,7 @@ static br_error custom_query(br_value* pvalue, void** extra, br_size_t* pextra_s
     const br_device_pixelmap* self = block;
 
     if (tep->token == BRT_OPENGL_TEXTURE_U32) {
-        if (self->use_type == BRT_OFFSCREEN)
+        if (self->use_type == BRT_OFFSCREEN || self->use_type == BRT_HIDDEN)
             pvalue->u32 = self->asBack.glTex;
         else if (self->use_type == BRT_DEPTH)
             pvalue->u32 = self->asDepth.glDepth;
@@ -55,11 +55,61 @@ static struct br_tv_template_entry devicePixelmapTemplateEntries[] = {
 
 /*
  * (Re)create the renderbuffers and attach them to the framebuffer.
+ *
+ * Only hidden render targets (BRT_HIDDEN) and depth buffers matched from them own GL objects:
+ * a texture-backed framebuffer object that can be rendered to and then used as a texture.
+ * The offscreen backbuffer renders straight to the default framebuffer.
  */
 static br_error recreate_renderbuffers(br_device_pixelmap* self) {
-    return BRE_OK;
+    GLint gl_internal_format;
+    GLenum gl_format, gl_type;
+    GLsizeiptr gl_elem_bytes;
+    GLuint fbo;
+    GLenum status;
 
+    if (self->use_type == BRT_HIDDEN) {
+        if (VIDEOI_BrPixelmapGetTypeDetails(self->pm_type, &gl_internal_format, &gl_format, &gl_type, &gl_elem_bytes, NULL) != BRE_OK)
+            return BRE_FAIL;
 
+        glGenTextures(1, &self->asBack.glTex);
+        glBindTexture(GL_TEXTURE_2D, self->asBack.glTex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, gl_internal_format, self->pm_width, self->pm_height, 0, gl_format, gl_type, NULL);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        glGenFramebuffers(1, &self->asBack.glFbo);
+        fbo = self->asBack.glFbo;
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, self->asBack.glTex, 0);
+    } else if (self->use_type == BRT_DEPTH && self->asDepth.backbuffer->use_type == BRT_HIDDEN) {
+        if (VIDEOI_BrPixelmapGetTypeDetails(self->pm_type, &gl_internal_format, &gl_format, &gl_type, &gl_elem_bytes, NULL) != BRE_OK)
+            return BRE_FAIL;
+
+        glGenTextures(1, &self->asDepth.glDepth);
+        glBindTexture(GL_TEXTURE_2D, self->asDepth.glDepth);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexImage2D(GL_TEXTURE_2D, 0, gl_internal_format, self->pm_width, self->pm_height, 0, gl_format, gl_type, NULL);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        fbo = self->asDepth.backbuffer->asBack.glFbo;
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, self->asDepth.glDepth, 0);
+    } else {
+        return BRE_OK;
+    }
+
+    status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        BrLogPrintf("GLREND: Render target framebuffer is incomplete (0x%x)\n", status);
+        return BRE_FAIL;
+    }
+
+    GL_CHECK_ERROR();
     return BRE_OK;
 }
 
@@ -192,13 +242,20 @@ br_error BR_CMETHOD_DECL(br_device_pixelmap_gl, match)(br_device_pixelmap* self,
     case BRT_OFFSCREEN:
         typestring = "Backbuffer";
         break;
+    case BRT_HIDDEN:
+        /*
+         * Not displayed, rendered into a framebuffer object. The colour texture can be queried
+         * with OPENGL_TEXTURE_U32, e.g. to hand the image to another API.
+         */
+        typestring = "RenderTarget";
+        break;
     case BRT_DEPTH:
         typestring = "Depth";
 
         /*
-         * Depth buffers must be matched with the backbuffer.
+         * Depth buffers must be matched with the backbuffer or a render target.
          */
-        if (self->use_type != BRT_OFFSCREEN)
+        if (self->use_type != BRT_OFFSCREEN && self->use_type != BRT_HIDDEN)
             return BRE_UNSUPPORTED;
 
         /*
@@ -220,9 +277,9 @@ br_error BR_CMETHOD_DECL(br_device_pixelmap_gl, match)(br_device_pixelmap* self,
     }
 
     /*
-     * Only allow backbuffers to be instantiated from the frontbuffer.
+     * Only allow backbuffers and render targets to be instantiated from the frontbuffer.
      */
-    if (self->use_type == BRT_NONE && mt.use_type != BRT_OFFSCREEN)
+    if (self->use_type == BRT_NONE && mt.use_type != BRT_OFFSCREEN && mt.use_type != BRT_HIDDEN)
         return BRE_UNSUPPORTED;
 
     if (mt.type == BR_PMT_MAX)
@@ -259,7 +316,7 @@ br_error BR_CMETHOD_DECL(br_device_pixelmap_gl, match)(br_device_pixelmap* self,
     pm->pm_base_x = 0;
     pm->pm_base_y = 0;
     pm->sub_pixelmap = 0;
-    if (mt.use_type == BRT_OFFSCREEN) {
+    if (mt.use_type == BRT_OFFSCREEN || mt.use_type == BRT_HIDDEN) {
         // pm->asBack.depthbuffer = NULL;
         // glGenFramebuffers(1, &pm->asBack.glFbo);
     } else {
@@ -269,6 +326,8 @@ br_error BR_CMETHOD_DECL(br_device_pixelmap_gl, match)(br_device_pixelmap* self,
     }
 
     if (recreate_renderbuffers(pm) != BRE_OK) {
+        if (mt.use_type == BRT_DEPTH)
+            self->asBack.depthbuffer = NULL;
         --self->screen->asFront.num_refs;
         delete_gl_resources(pm);
         BrResFreeNoCallback(pm);
@@ -322,8 +381,30 @@ br_error BR_CMETHOD_DECL(br_device_pixelmap_gl, rectangleFill)(br_device_pixelma
     VIDEOI_BrRectToGL((br_pixelmap*)self, rect);
 
     if (self->use_type == BRT_DEPTH) {
+        if (self->asDepth.backbuffer != NULL && self->asDepth.backbuffer->use_type == BRT_HIDDEN) {
+            /* Render target: clear its own framebuffer object. Only whole-buffer clears. */
+            DevicePixelmapGLBindFramebuffer(GL_FRAMEBUFFER, self);
+            glDepthMask(GL_TRUE);
+            glClear(GL_DEPTH_BUFFER_BIT);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            return BRE_OK;
+        }
         //glBindFramebuffer(GL_FRAMEBUFFER, self->asBack.depthbuffer->asBack.glFbo);
         glClear(GL_DEPTH_BUFFER_BIT);
+        return BRE_OK;
+    }
+
+    if (self->use_type == BRT_HIDDEN) {
+        /* Render target: clear its own framebuffer object. Only whole-buffer clears. */
+        GLfloat old_clear_colour[4];
+        glGetFloatv(GL_COLOR_CLEAR_VALUE, old_clear_colour);
+        DevicePixelmapGLBindFramebuffer(GL_FRAMEBUFFER, self);
+        glClearColor(r, g, b, a);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        glClear(GL_COLOR_BUFFER_BIT);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glClearColor(old_clear_colour[0], old_clear_colour[1], old_clear_colour[2], old_clear_colour[3]);
+        GL_CHECK_ERROR();
         return BRE_OK;
     }
 
