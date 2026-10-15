@@ -43,6 +43,7 @@ br_error DevicePixelmapGLBindFramebuffer(GLenum target, br_device_pixelmap *pm)
 
     switch(pm->use_type) {
         case BRT_OFFSCREEN:
+        case BRT_HIDDEN:
             fbo = pm->asBack.glFbo;
             break;
         case BRT_DEPTH:
