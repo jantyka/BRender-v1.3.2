@@ -643,27 +643,59 @@ void BR_PUBLIC_ENTRY BrRendererFocusLossEnd(){
 }
 
 /*
- * Optional view->screen transform that replaces the camera's projection
+ * Optional frustum that replaces the camera's field of view: tangents of the
+ * angles to the left, right, top and bottom edge (left and bottom negative)
  */
-static br_matrix4 view_to_screen_override;
-static br_boolean view_to_screen_override_set = BR_FALSE;
+static br_scalar frustum_override[4];
+static br_boolean frustum_override_set = BR_FALSE;
 
 /*
- * BrDbSetViewToScreenOverride()
+ * BrDbSetFrustumOverride()
  *
- * Use the given matrix (same convention as the camera's projection) as the
- * view->screen transform of all following scenes instead of deriving it
- * from the camera - e.g. for the asymmetric view frustums of a stereo
- * display. Also used for culling. NULL returns to the camera's projection.
+ * Use an asymmetric frustum for all following perspective scenes instead of
+ * the camera's field of view and aspect - e.g. for the eyes of a stereo
+ * display. Hither and yon still come from the camera when each scene
+ * begins, so code that adjusts them per scene keeps working. Also used for
+ * culling. Call BrDbClearFrustumOverride() to return to the camera's field
+ * of view.
  */
-void BR_PUBLIC_ENTRY BrDbSetViewToScreenOverride(br_matrix4 *view_to_screen)
+void BR_PUBLIC_ENTRY BrDbSetFrustumOverride(br_scalar left, br_scalar right, br_scalar top, br_scalar bottom)
 {
-	if(view_to_screen != NULL) {
-		BrMatrix4Copy(&view_to_screen_override, view_to_screen);
-		view_to_screen_override_set = BR_TRUE;
-	} else {
-		view_to_screen_override_set = BR_FALSE;
-	}
+	frustum_override[0] = left;
+	frustum_override[1] = right;
+	frustum_override[2] = top;
+	frustum_override[3] = bottom;
+	frustum_override_set = BR_TRUE;
+}
+
+void BR_PUBLIC_ENTRY BrDbClearFrustumOverride(void)
+{
+	frustum_override_set = BR_FALSE;
+}
+
+/*
+ * Projection for the frustum override, same layout as Matrix4PerspectiveNew
+ * but with the centre of projection moved to match the asymmetric frustum
+ */
+static void FrustumOverrideMatrix4(br_matrix4 *mat, br_scalar hither, br_scalar yon)
+{
+	br_scalar left = frustum_override[0];
+	br_scalar right = frustum_override[1];
+	br_scalar top = frustum_override[2];
+	br_scalar bottom = frustum_override[3];
+	int i, j;
+
+	for(i = 0; i < 4; i++)
+		for(j = 0; j < 4; j++)
+			mat->m[i][j] = S0;
+
+	mat->m[0][0] = BR_DIV(BR_SCALAR(2.0), right - left);
+	mat->m[1][1] = BR_DIV(BR_SCALAR(2.0), top - bottom);
+	mat->m[2][0] = BR_DIV(right + left, right - left);
+	mat->m[2][1] = BR_DIV(top + bottom, top - bottom);
+	mat->m[2][2] = BR_DIV(yon + hither, yon - hither);
+	mat->m[2][3] = BR_SCALAR(-1.0);
+	mat->m[3][2] = BR_CONST_MUL(BR_MULDIV(yon, hither, yon - hither), -2);
 }
 
 /*
@@ -691,9 +723,10 @@ void BR_PUBLIC_ENTRY BrDbSceneRenderBegin(br_actor *world,
 	 * Work out View Transform from info. in camera actor
 	 */
 	vtos_type = CameraToScreenMatrix4(&vtos, camera);
-	if(view_to_screen_override_set) {
-		BrMatrix4Copy(&vtos, &view_to_screen_override);
-		vtos_type = BRT_PERSPECTIVE;
+	if(frustum_override_set && vtos_type == BRT_PERSPECTIVE) {
+		/* View volume is along -ve Z, as in CameraToScreenMatrix4 */
+		FrustumOverrideMatrix4(&vtos, -((br_camera *)camera->type_data)->hither_z,
+			-((br_camera *)camera->type_data)->yon_z);
 	}
 	v.p = &vtos;
 	RendererPartSet(v1db.renderer, BRT_MATRIX, 0, BRT_AS_MATRIX4_SCALAR(VIEW_TO_SCREEN), v);
