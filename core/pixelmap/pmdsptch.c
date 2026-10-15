@@ -47,6 +47,21 @@ br_pixelmap * BR_PUBLIC_ENTRY BrPixelmapAllocateSub(br_pixelmap *src,
 	return new;
 }
 
+/*
+ * Query a device specific value of a pixelmap, e.g. the OpenGL texture
+ * behind a render target (glrend: OPENGL_TEXTURE_U32). The type of *pvalue
+ * is given by the token.
+ */
+br_error BR_PUBLIC_ENTRY BrPixelmapQuery(br_pixelmap *pm, void *pvalue, br_token t)
+{
+	UASSERT(pm);
+	UASSERT(pvalue);
+
+	CheckDispatch(pm);
+
+	return ObjectQuery(pm, pvalue, t);
+}
+
 void BR_PUBLIC_ENTRY BrPixelmapFree(br_pixelmap *src)
 {
 	UASSERT(src);

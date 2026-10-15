@@ -60,6 +60,8 @@ br_pixelmap * BR_PUBLIC_ENTRY BrPixelmapDirectUnlock(br_pixelmap *src);
 // dethrace added
 br_pixelmap * BR_PUBLIC_ENTRY BrPixelmapFlush(br_pixelmap *src);
 
+br_error BR_PUBLIC_ENTRY BrPixelmapQuery(br_pixelmap *pm, void *pvalue, br_token t);
+
 /*
  * Pixelmap operations
  */
