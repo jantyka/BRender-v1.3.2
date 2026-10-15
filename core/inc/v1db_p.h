@@ -343,6 +343,8 @@ void BR_PUBLIC_ENTRY BrRendererFrameEnd(void);
 void BR_PUBLIC_ENTRY BrRendererFocusLossBegin(void);
 void BR_PUBLIC_ENTRY BrRendererFocusLossEnd(void);
 
+void BR_PUBLIC_ENTRY BrDbSetViewToScreenOverride(br_matrix4 *view_to_screen);
+
 /*
  * Renderering - Z Buffer
  */

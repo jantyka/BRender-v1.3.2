@@ -643,6 +643,30 @@ void BR_PUBLIC_ENTRY BrRendererFocusLossEnd(){
 }
 
 /*
+ * Optional view->screen transform that replaces the camera's projection
+ */
+static br_matrix4 view_to_screen_override;
+static br_boolean view_to_screen_override_set = BR_FALSE;
+
+/*
+ * BrDbSetViewToScreenOverride()
+ *
+ * Use the given matrix (same convention as the camera's projection) as the
+ * view->screen transform of all following scenes instead of deriving it
+ * from the camera - e.g. for the asymmetric view frustums of a stereo
+ * display. Also used for culling. NULL returns to the camera's projection.
+ */
+void BR_PUBLIC_ENTRY BrDbSetViewToScreenOverride(br_matrix4 *view_to_screen)
+{
+	if(view_to_screen != NULL) {
+		BrMatrix4Copy(&view_to_screen_override, view_to_screen);
+		view_to_screen_override_set = BR_TRUE;
+	} else {
+		view_to_screen_override_set = BR_FALSE;
+	}
+}
+
+/*
  * BrDbSceneRenderBegin()
  *
  * Setup a new scene to be rendered - processes the camera, lights
@@ -667,6 +691,10 @@ void BR_PUBLIC_ENTRY BrDbSceneRenderBegin(br_actor *world,
 	 * Work out View Transform from info. in camera actor
 	 */
 	vtos_type = CameraToScreenMatrix4(&vtos, camera);
+	if(view_to_screen_override_set) {
+		BrMatrix4Copy(&vtos, &view_to_screen_override);
+		vtos_type = BRT_PERSPECTIVE;
+	}
 	v.p = &vtos;
 	RendererPartSet(v1db.renderer, BRT_MATRIX, 0, BRT_AS_MATRIX4_SCALAR(VIEW_TO_SCREEN), v);
 	v.t = vtos_type;
