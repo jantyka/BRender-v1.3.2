@@ -103,6 +103,12 @@ typedef struct br_device_pixelmap {
             GLuint screen_buffer_vao, screen_buffer_ebo;
 
             br_int_32 num_refs;
+
+            /*
+             * Optional render target that receives a copy of everything flushed from the
+             * backbuffer's 2D overlay (see BrGLRendSetOverlayCapture)
+             */
+            struct br_device_pixelmap* overlay_capture;
         } asFront;
         struct {
             struct br_device_pixelmap* depthbuffer;
@@ -129,6 +135,7 @@ typedef struct br_device_pixelmap {
 } br_device_pixelmap;
 
 void RenderFullScreenTextureToFrameBuffer(br_device_pixelmap* self, GLuint textureId, GLuint fb, int flipVertically, int discardPurplePixels);
+void RenderFullScreenTextureToRenderTarget(br_device_pixelmap* self, GLuint textureId, br_device_pixelmap* target, int discardPurplePixels);
 
 #endif
 

@@ -593,6 +593,8 @@ br_error BR_CMETHOD_DECL(br_device_pixelmap_gl, flush)(br_device_pixelmap* self)
 
     // render locked pixels to framebuffer texture, ignoring purple pixels
     RenderFullScreenTextureToFrameBuffer(self->screen, self->asBack.overlayTexture, 0, 0, 1);
+    if (self->screen->asFront.overlay_capture != NULL)
+        RenderFullScreenTextureToRenderTarget(self->screen, self->asBack.overlayTexture, self->screen->asFront.overlay_capture, 1);
 
     // reset pixels back to gamedev purple
 

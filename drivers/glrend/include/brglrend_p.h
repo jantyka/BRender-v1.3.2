@@ -12,6 +12,11 @@ extern "C" {
  */
 struct br_device *BR_EXPORT BrDrv1GLBegin(const char *arguments);
 
+/*
+ * Copy every flush of the 2D overlay into a hidden render target (NULL: off)
+ */
+void BR_EXPORT BrGLRendSetOverlayCapture(br_pixelmap *screen, br_pixelmap *target);
+
 #endif /* _NO_PROTOTYPES */
 
 #ifdef __cplusplus

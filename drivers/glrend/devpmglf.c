@@ -145,6 +145,45 @@ void RenderFullScreenTextureToFrameBuffer(br_device_pixelmap* self, GLuint textu
     GL_CHECK_ERROR();
 }
 
+/*
+ * Same as RenderFullScreenTextureToFrameBuffer, but into a hidden render target (BRT_HIDDEN),
+ * covering all of it. The default framebuffer is bound again afterwards.
+ */
+void RenderFullScreenTextureToRenderTarget(br_device_pixelmap* self, GLuint textureId, br_device_pixelmap* target, int discardPurplePixels) {
+    DevicePixelmapGLBindFramebuffer(GL_FRAMEBUFFER, target);
+    glViewport(0, 0, target->pm_width, target->pm_height);
+
+    glDisable(GL_DEPTH_TEST);
+    glBindTexture(GL_TEXTURE_2D, textureId);
+    glBindVertexArray(self->asFront.screen_buffer_vao);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self->asFront.screen_buffer_ebo);
+    glUseProgram(self->asFront.video.defaultProgram.program);
+    glUniform1f(self->asFront.video.defaultProgram.uFlipVertically, 0.0f);
+    glUniform1i(self->asFront.video.defaultProgram.uDiscardPurplePixels, discardPurplePixels);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+    glBindVertexArray(0);
+    glEnable(GL_DEPTH_TEST);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    GL_CHECK_ERROR();
+}
+
+/*
+ * Make every flush of the 2D overlay (the locked backbuffer pixels) also draw into the given hidden
+ * render target, so the 2D elements (menus, HUD) are available on their own, without the 3D
+ * scene. Pixels the overlay leaves transparent are not touched; the application clears the target
+ * when it wants to start over. NULL turns it off.
+ */
+void BR_EXPORT BrGLRendSetOverlayCapture(br_pixelmap* screen, br_pixelmap* target) {
+    br_device_pixelmap* front = (br_device_pixelmap*)screen;
+
+    if (front == NULL || front->use_type != BRT_NONE)
+        return;
+    if (target != NULL && ((br_device_pixelmap*)target)->use_type != BRT_HIDDEN)
+        return;
+    front->asFront.overlay_capture = (br_device_pixelmap*)target;
+}
+
 br_device_pixelmap* DevicePixelmapGLAllocateFront(br_device* dev, br_output_facility* outfcty, br_token_value* tv) {
     br_device_pixelmap* self;
     br_int_32 count;
