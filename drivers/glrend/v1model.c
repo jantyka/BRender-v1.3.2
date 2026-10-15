@@ -278,6 +278,8 @@ static void apply_stored_properties(HVIDEO hVideo, state_stack* state, uint32_t 
             apply_blend_mode(state);
         } else {
             glDisable(GL_BLEND);
+            /* Opaque: write full alpha, so the result is usable where alpha matters (e.g. render targets) */
+            model->alpha = 1.0f;
         }
 
         model->fog_enabled = state->prim.fog_enabled;
