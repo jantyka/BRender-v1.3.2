@@ -88,6 +88,13 @@ static br_error recreate_renderbuffers(br_device_pixelmap* self) {
         if (VIDEOI_BrPixelmapGetTypeDetails(self->pm_type, &gl_internal_format, &gl_format, &gl_type, &gl_elem_bytes, NULL) != BRE_OK)
             return BRE_FAIL;
 
+        /*
+         * 24 bits of depth on the GPU, like a usual window framebuffer: with a far yon (extended
+         * draw distance) 16 bits make distant faces fight. The pixelmap stays DEPTH_16 for BRender.
+         */
+        if (gl_internal_format == GL_DEPTH_COMPONENT16)
+            gl_internal_format = GL_DEPTH_COMPONENT24;
+
         glGenTextures(1, &self->asDepth.glDepth);
         glBindTexture(GL_TEXTURE_2D, self->asDepth.glDepth);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
