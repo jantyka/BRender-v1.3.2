@@ -1,5 +1,18 @@
 # Argonaut Blazing Render (BRender)
 
+## deVRace fork
+
+This fork of [dethrace-labs/BRender-v1.3.2](https://github.com/dethrace-labs/BRender-v1.3.2) holds the engine changes needed by [deVRace](https://github.com/jantyka/deVRace), a Linux VR port of Dethrace (Carmageddon). deVRace includes it as a submodule; the changes are on the branch `vr-openxr`, each in its own commit:
+
+- **Render targets per eye**: the OpenGL renderer could only draw to the screen; it can now also draw into hidden render targets backed by framebuffer objects, one per eye (`61f038e`, `60c23ca`).
+- **Projection per eye**: a headset gives each eye its own asymmetric field of view; the view to screen transform can now be overridden with it (`0673e6b`, `fcf8fe7`).
+- **Querying device values** the VR code needs, such as the OpenGL texture of a render target (`34e17d8`).
+- **HUD and menus on the headset's panel**: the 2D overlay can be captured into a render target, which deVRace shows as a panel in the headset (`9a23fb0`, `0b2d53b`).
+
+Without these features being used, BRender behaves as before.
+
+---
+
 This is a fork of the original BRender v1.3.2 open source release at https://github.com/foone/BRender-v1.3.2
 
 Additions:
