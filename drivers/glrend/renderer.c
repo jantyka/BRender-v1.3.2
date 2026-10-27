@@ -109,9 +109,10 @@ static void BR_CMETHOD_DECL(br_renderer_gl, sceneBegin)(br_renderer* self) {
     }
 
     if (colour_target->use_type == BRT_HIDDEN) {
-        /* Render target: its own framebuffer object, not scaled to the window. */
+        /* Render target: its own framebuffer object, not scaled to the window. A sub-pixelmap
+         * renders into its rectangle of the target only. */
         DevicePixelmapGLBindFramebuffer(GL_FRAMEBUFFER, colour_target);
-        glViewport(0, 0, colour_target->pm_width, colour_target->pm_height);
+        glViewport(colour_target->pm_base_x, base_y, colour_target->pm_width, colour_target->pm_height);
     } else {
         DevicePixelmapGLGetViewport(colour_target->screen, &x, &y, &rx, &ry);
         glViewport(colour_target->pm_base_x * rx + x, base_y *ry + y, colour_target->pm_width * rx, colour_target->pm_height * ry);
